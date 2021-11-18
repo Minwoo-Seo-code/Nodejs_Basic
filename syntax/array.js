@@ -11,5 +11,11 @@ arr[0] = 'Hello';
 console.log('arr[0] :: ' + arr[0]);  //Hello
 console.log('arr.length :: ' + arr.length);
 
-arr.push('E');
+arr.push("E");
 console.log(arr);
+
+arr.push("F");
+console.log(arr);
+
+var length = arr.length;
+console.log("length = " + length);
