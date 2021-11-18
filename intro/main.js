@@ -1,6 +1,8 @@
 var http = require('http');
 var fs = require('fs');
 var url = require('url');
+var qs = require('querystring') ;
+
 function templateHTML(title, list, body){
   return `
   <!doctype html>
@@ -12,6 +14,7 @@ function templateHTML(title, list, body){
   <body>
     <h1><a href="/">WEB2</a></h1>
     ${list}
+    <a href="/create">create</a>
     ${body}
   </body>
   </html>
@@ -57,6 +60,45 @@ var app = http.createServer(function(request,response){
           });
         });
       }
+    } else if(pathname === '/create'){
+      fs.readdir('./data', function(error, filelist){
+        var title = 'WEB - create';
+        var list = templateList(filelist);
+        var template = templateHTML(title, list, `
+          <form action="http://localhost:3000/create_process" method="post">
+            <p><input type="text" name="title" placeholder="title"></p>
+            <p>
+              <textarea name="description" placeholder="description"></textarea>
+            </p>
+            <p>
+              <input type="submit" name="제출">
+            </p>
+          </form>
+          `);
+
+        response.writeHead(200);
+        response.end(template);
+      })
+    } else if(pathname === '/create_process') {
+      var body = '';
+      request.on('data', function(data){  //서버쪽에서 수신할때마다 data라는 인자를 통해서 수신한 정보를 넘겨준다.
+        body += data; //body데이터에 data를 추가한다.
+
+        if (body.length > 1e6) {  //수신받는 데이터가 초과할 시 서버 연결을 끊겠다.
+          request.connection.destroy();
+        }
+
+      });
+      request.on('end', function(){
+        var post = qs.parse(body);
+        var title = post.title;
+        var description = post.description;
+        fs.writeFile(`data/${title}`, description, 'utf8', function (err){  //에러를 처리하는 콜백함수
+          response.writeHead(302, {Location: `/?id=${title}`});  //200은 성공했다면...302는 일시적으로 이 페이지로 이동시켜라
+          response.end('successfull');
+        });
+      });
+
     } else {
       response.writeHead(404);
       response.end('Not found');
