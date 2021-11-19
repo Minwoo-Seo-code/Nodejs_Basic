@@ -3,7 +3,7 @@ var fs = require('fs');
 var url = require('url');
 var qs = require('querystring') ;
 
-function templateHTML(title, list, body){
+function templateHTML(title, list, body, control){
   return `
   <!doctype html>
   <html>
@@ -14,7 +14,7 @@ function templateHTML(title, list, body){
   <body>
     <h1><a href="/">WEB2</a></h1>
     ${list}
-    <a href="/create">create</a>
+    ${control}
     ${body}
   </body>
   </html>
@@ -42,19 +42,28 @@ var app = http.createServer(function(request,response){
           var title = 'Welcome';
           var description = 'Hello, Node.js';
           var list = templateList(filelist);
-          var template = templateHTML(title, list, `<h2>${title}</h2>${description}`); //`<h2>${title}</h2>${description}` 자체가 body이다.
+          var template = templateHTML(title, list,
+            `<h2>${title}</h2>${description}`,
+            `<a href="/create">create</a>`  //home 이니까 업데이트를 지운다.
+            ); //`<h2>${title}</h2>${description}` 자체가 body이다.
 
           response.writeHead(200);
           response.end(template);
-        })
+        });
 
       } else {
         fs.readdir('./data', function(error, filelist){
-          console.log(queryData.id);
           fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
             var title = queryData.id;
             var list = templateList(filelist);
-            var template = templateHTML(title, list, `<h2>${title}</h2>${description}`);
+            var template = templateHTML(title, list, `<h2>${title}</h2>${description}`,
+            `<a href="/create">create</a>
+             <a href="/update?id=${title}">update</a>
+             <form action="/delete_process" method="post">
+                <input type="hidden" name="id" value="${title}">
+                <input type="submit" value="삭제">
+             </form>
+            `); //이 부분은 아이디값을 선택한 것이니까 update가 나와도 된다.
             response.writeHead(200);
             response.end(template);
           });
@@ -65,7 +74,7 @@ var app = http.createServer(function(request,response){
         var title = 'WEB - create';
         var list = templateList(filelist);
         var template = templateHTML(title, list, `
-          <form action="http://localhost:3000/create_process" method="post">
+          <form action="/create_process" method="post">
             <p><input type="text" name="title" placeholder="title"></p>
             <p>
               <textarea name="description" placeholder="description"></textarea>
@@ -74,8 +83,7 @@ var app = http.createServer(function(request,response){
               <input type="submit" name="제출">
             </p>
           </form>
-          `);
-
+          `, '');
         response.writeHead(200);
         response.end(template);
       })
@@ -99,12 +107,67 @@ var app = http.createServer(function(request,response){
         });
       });
 
-    } else {
+    } else if (pathname === '/update') {
+      fs.readdir('./data', function(error, filelist){
+        fs.readFile(`data/${queryData.id}`, 'utf8', function(err, description){
+          var title = queryData.id;
+          var list = templateList(filelist);
+          var template = templateHTML(title, list,
+            `
+            <form action="/update_process" method="post">
+              <input type="hidden" name="id" value="${title}">
+              <p><input type="text" name="title" value="${title}"></p>
+              <p>
+                <textarea name="description" placeholder="description">${description}</textarea>
+              </p>
+              <p><input type="submit" value="수정"></p>
+            </form>
+            `,
+            `<a href="/create">create</a> <a href="/update?id=${title}">update</a>`
+          );
+          response.writeHead(200);
+          response.end(template);
+        });
+      });
+    } else if (pathname === '/update_process'){
+      var body = '';
+      request.on('data', function(data){  //서버쪽에서 수신할때마다 data라는 인자를 통해서 수신한 정보를 넘겨준다.
+        body += data; //body데이터에 data를 추가한다.
+        if (body.length > 1e6) {  //수신받는 데이터가 초과할 시 서버 연결을 끊겠다.
+          request.connection.destroy();
+        }
+      });
+      request.on('end', function(){
+        var post = qs.parse(body);
+        var id = post.id;
+        var title = post.title;
+        var description = post.description;
+        fs.rename(`data/${id}`, `data/${title}`, function (err){
+          fs.writeFile(`data/${title}`, description, 'utf8', function (err){  //에러를 처리하는 콜백함수
+            response.writeHead(302, {Location: `/?id=${title}`});  //200은 성공했다면...302는 일시적으로 이 페이지로 이동시켜라
+            response.end();
+          });
+      });
+    });
+  } else if (pathname === '/delete_process'){
+    var body = '';
+    request.on('data', function(data){  //서버쪽에서 수신할때마다 data라는 인자를 통해서 수신한 정보를 넘겨준다.
+      body += data; //body데이터에 data를 추가한다.
+    });
+
+    request.on('end', function(){
+      var post = qs.parse(body);
+      var id = post.id;
+      fs.unlink(`data/${id}`, function(error){
+        response.writeHead(302, {Location: `/`});
+        response.end();
+      });
+  });
+
+} else {
       response.writeHead(404);
       response.end('Not found');
     }
-
-
 
 });
 app.listen(3000);
